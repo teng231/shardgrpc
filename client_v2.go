@@ -18,7 +18,7 @@ func appendToOutgoingContext(ctx context.Context, key, value string) context.Con
 func clientCustomInvoke(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, addrs []string, lock *sync.RWMutex, mConn map[string]*grpc.ClientConn, opts ...grpc.CallOption) (metadata.MD, error) {
 	// calculate shard key to find extract server
 	// get shard address from this server
-	skey := GetShardKey(ctx, req)
+	skey := GetClientShardKey(ctx, req)
 	addr, _ := ShardKeyCalc(skey, addrs)
 	co, has := mConn[addr]
 	if !has {
@@ -73,7 +73,7 @@ func UnaryClientInterceptorV2() grpc.UnaryClientInterceptor {
 				err = invoker(ctx, method, req, reply, co, opts...)
 			}
 			if err != nil {
-				flog(err)
+				flog("[client] ", err)
 				return err
 			}
 			if len(header[shard_addrs]) > 0 {

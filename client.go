@@ -3,6 +3,7 @@ package shardgrpc
 import (
 	"context"
 	"hash/crc32"
+	"log"
 	"reflect"
 	"strings"
 	"sync"
@@ -40,7 +41,7 @@ func UnaryClientInterceptor() grpc.UnaryClientInterceptor {
 			// automatic call to grpc server
 			err := invoker(ctx, method, req, reply, cc, opts...)
 			if err != nil {
-				flog(err)
+				flog("[client] ", err)
 				return err
 			}
 			flog("header 2222 ", header)
@@ -56,7 +57,7 @@ func UnaryClientInterceptor() grpc.UnaryClientInterceptor {
 			return nil
 		}
 		// get extract shardKey
-		skey := GetShardKey(ctx, req)
+		skey := GetClientShardKey(ctx, req)
 		addr, _ := ShardKeyCalc(skey, addrs)
 		co, has := mConn[addr]
 		if !has {
@@ -65,7 +66,7 @@ func UnaryClientInterceptor() grpc.UnaryClientInterceptor {
 			if err != nil {
 				return err
 			}
-			flog("dial ", addr)
+			flog("[client] ", "dial ", addr)
 			lock.RLock()
 			mConn[addr] = co
 			lock.RUnlock()
@@ -112,9 +113,27 @@ func getReturnType(server interface{}, fullmethod string) reflect.Type {
 	}
 	return nil
 }
-
-func GetShardKey(ctx context.Context, message interface{}) string {
+func GetServerShardKey(ctx context.Context, message interface{}) string {
 	md, _ := metadata.FromIncomingContext(ctx)
+	log.Print("income ", md)
+	if len(md[shard_key]) > 0 {
+		return md[shard_key][0]
+	}
+	if message == nil {
+		return ""
+	}
+	msgrefl := message.(proto.Message).ProtoReflect()
+	accIdDesc := msgrefl.Descriptor().Fields().ByName(account_id)
+	if accIdDesc == nil {
+		return ""
+	}
+
+	return msgrefl.Get(accIdDesc).String()
+}
+
+func GetClientShardKey(ctx context.Context, message interface{}) string {
+	md, _ := metadata.FromOutgoingContext(ctx)
+	log.Print("outgoing ", md)
 	if len(md[shard_key]) > 0 {
 		return md[shard_key][0]
 	}

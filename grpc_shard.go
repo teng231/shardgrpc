@@ -16,14 +16,14 @@ const (
 	shard_redirected    = "shard_redirected"
 	shard_forwarded_for = "shard_forwarded_for"
 	account_id          = "account_id"
-	shard_running       = "true"
+	shard_running       = "shard_running"
 )
 
 var (
 	enableLog = os.Getenv("SHARD_ENABLE_LOG") == "true"
 )
 
-func jsonLog(i interface{}) {
+func jlog(i interface{}) {
 	bin, _ := json.MarshalIndent(i, " ", " ")
 	log.Print(string(bin))
 }
@@ -32,5 +32,5 @@ func flog(data ...interface{}) {
 	if !enableLog {
 		return
 	}
-	log.Print(data)
+	log.Print(data...)
 }

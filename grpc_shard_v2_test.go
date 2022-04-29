@@ -60,7 +60,7 @@ func TestShardServerAndClientv2(t *testing.T) {
 		panic(err)
 	}
 	client := pb.NewVistorServiceClient(conn)
-	time.Sleep(1 * time.Second)
+	time.Sleep(2 * time.Second)
 	// correct server
 	var header metadata.MD // variable to store header and trailer
 	resp, err := client.ListVisitors(context.Background(), &pb.VisitorRequest{AccountId: "thanh"}, grpc.Header(&header))
@@ -88,6 +88,17 @@ func TestShardServerAndClientv2(t *testing.T) {
 	// if strings.Join(header3.Get("total_shards"), "") != "" {
 	// 	t.Fatal("SHOULD NOT REDIRECT")
 	// }
+	log.Print("------------------------------------------------------------------------------------------------")
+	// correct server
+	var header4 metadata.MD // variable to store header and trailer
+	ctx := context.Background()
+	ctx = metadata.AppendToOutgoingContext(ctx, shard_key, "thanh1")
+	resp, err = client.ListVisitors(ctx, &pb.VisitorRequest{}, grpc.Header(&header4))
+	log.Print("headerxxxxx", header4)
+	log.Print(resp, err)
+	if resp.Total == 0 {
+		t.Fail()
+	}
 }
 
 // clientshard -> normal server

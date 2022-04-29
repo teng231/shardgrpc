@@ -63,9 +63,9 @@ func UnaryServerInterceptorV2(serviceAddrs []string, id int) grpc.UnaryServerInt
 		if !ok {
 			return nil, fmt.Errorf("couldn't parse incoming context metadata")
 		}
-		flog(md)
+		flog("[server] ", md)
 		// want get from md `shard_key`
-		skey := GetShardKey(ctx, req)
+		skey := GetServerShardKey(ctx, req)
 		// recheck `shard_key` extractlly
 		// if calcId not equal with id. need forward to extract grpc server.
 		extractAddr, sNum := ShardKeyCalc(skey, serviceAddrs)
