@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+package pb;
+option go_package = "github.com/teng231/shardgrpc/pb";
+
+// import "google/api/annotations.proto";
+
+service VistorService {
+    rpc ListVisitors(VisitorRequest) returns (Visitors);
+}
+
+
+//------------------------------ Hệ thống các app sẽ liên kết ---------------------------------
+
+message Empty{}
+
+message VisitorRequest {
+	// `gorm:"primaryKey;not null;autoIncrement"`
+    int64 id = 1;
+    // `gorm:"text"`
+    string request = 2;
+    int64 created = 3;
+    // `gorm:"text"`
+    string response = 4;
+    string path = 5;
+    // `gorm:"text"`
+    string before = 6;
+
+    int32 duration = 7;
+    int32 httpcode = 8;
+    Type type =9;
+    enum Type {
+        default_type = 0;
+        api_income = 1;
+        api_comeout = 2;
+    }
+    string account_id = 10;
+}
+
+message Visitors {
+    int32 total = 2;
+}
