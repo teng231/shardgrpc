@@ -14,10 +14,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-type MetadataInjective struct {
-}
-
-func ShardKeyCalc(skey string, addrs []string) (string, int) {
+func GetShardAddressFromShardKey(skey string, addrs []string) (string, int) {
 	index := int(crc32.ChecksumIEEE([]byte(skey))) % len(addrs)
 	flog(skey, " ", index)
 	host := addrs[index]
@@ -58,7 +55,7 @@ func UnaryClientInterceptor() grpc.UnaryClientInterceptor {
 		}
 		// get extract shardKey
 		skey := GetClientShardKey(ctx, req)
-		addr, _ := ShardKeyCalc(skey, addrs)
+		addr, _ := GetShardAddressFromShardKey(skey, addrs)
 		co, has := mConn[addr]
 		if !has {
 			var err error

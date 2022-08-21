@@ -19,7 +19,7 @@ func clientCustomInvoke(ctx context.Context, method string, req, reply interface
 	// calculate shard key to find extract server
 	// get shard address from this server
 	skey := GetClientShardKey(ctx, req)
-	addr, _ := ShardKeyCalc(skey, addrs)
+	addr, _ := GetShardAddressFromShardKey(skey, addrs)
 	co, has := mConn[addr]
 	if !has {
 		var err error
