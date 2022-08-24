@@ -11,12 +11,12 @@ import (
 )
 
 const (
-	shard_key           = "shard_key"
-	shard_addrs         = "shard_addrs"
-	shard_redirected    = "shard_redirected"
-	shard_forwarded_for = "shard_forwarded_for"
+	shard_key           = "s_key"
+	shard_addrs         = "s_addrs"
+	shard_redirected    = "s_redirected"
+	shard_forwarded_for = "s_forwarded_for"
 	account_id          = "account_id"
-	shard_running       = "shard_running"
+	shard_running       = "s_running"
 )
 
 var (
