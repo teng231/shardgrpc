@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -165,4 +166,14 @@ func TestNotShardServerV2WithNormalcase(t *testing.T) {
 
 	// 	t.Fatal("SHOULD RETURN SHARD NUM", strings.Join(header2.Get("shard_addrs"), ","))
 	// }
+}
+
+func TestResolveHost(t *testing.T) {
+	hostname := "a12-service-1"
+	arr := strings.Split(hostname, "-")
+	if len(arr) < 2 {
+		log.Panicf("hostname '%s' not valid form xxx-i", hostname)
+	}
+	index, err := strconv.Atoi(arr[len(arr)-1])
+	log.Print(index, err)
 }

@@ -66,9 +66,9 @@ func UnaryClientInterceptorV2() grpc.UnaryClientInterceptor {
 					if err != nil {
 						return err
 					}
-					lock.RLock()
+					lock.Lock()
 					mConn[addr] = co
-					lock.RUnlock()
+					lock.Unlock()
 				}
 				err = invoker(ctx, method, req, reply, co, opts...)
 			}

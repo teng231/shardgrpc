@@ -24,10 +24,10 @@ func UnaryServerInterceptorV2Statefullset(hostname string, totalShard int) grpc.
 		hostname = os.Getenv("HOSTNAME")
 	}
 	arr := strings.Split(hostname, "-")
-	if len(arr) != 2 {
+	if len(arr) < 2 {
 		log.Panicf("hostname '%s' not valid form xxx-i", hostname)
 	}
-	index, err := strconv.Atoi(arr[1])
+	index, err := strconv.Atoi(arr[len(arr)-1])
 	if err != nil {
 		log.Panicf("hostname not include index, err: %s", err.Error())
 	}
