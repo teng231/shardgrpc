@@ -2,6 +2,7 @@ package shardgrpc
 
 import (
 	"context"
+	"log"
 	"strings"
 	"sync"
 
@@ -10,17 +11,25 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-func appendToOutgoingContext(ctx context.Context, key, value string) context.Context {
-	ctx = metadata.AppendToOutgoingContext(ctx, key, string(value))
-	return ctx
-}
+// func appendToOutgoingContext(ctx context.Context, key, value string) context.Context {
+// 	ctx = metadata.AppendToOutgoingContext(ctx, key, string(value))
+// 	return ctx
+// }
 
 func clientCustomInvoke(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, addrs []string, lock *sync.RWMutex, mConn map[string]*grpc.ClientConn, opts ...grpc.CallOption) (metadata.MD, error) {
 	// calculate shard key to find extract server
 	// get shard address from this server
+
 	skey := GetClientShardKey(ctx, req)
+
+	if len(addrs) == 0 {
+		panic("not found addrs")
+	}
+
 	addr, _ := GetShardAddressFromShardKey(skey, addrs)
+	lock.RLock()
 	co, has := mConn[addr]
+	lock.RUnlock()
 	if !has {
 		var err error
 		co, err = grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -45,18 +54,17 @@ func clientCustomInvoke(ctx context.Context, method string, req, reply interface
 func UnaryClientInterceptorV2() grpc.UnaryClientInterceptor {
 	mConn := make(map[string]*grpc.ClientConn)
 	lock := &sync.RWMutex{}
-
 	addrs := make([]string, 0)
 	return func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
-		flog("[client] addrs", addrs)
 		// At first time: have not info of all address
 		// Dial 1 of them to get all shard address then append to map
-		ctx = appendToOutgoingContext(ctx, shard_running, "true")
+		// log.Print(11111)
 		if len(addrs) == 0 {
 			var header metadata.MD
 			opts = append(opts, grpc.Header(&header))
 			// automatic call to grpc server
 			err := invoker(ctx, method, req, reply, cc, opts...)
+			// if header have shard_redirect value is need change process
 			if val := header.Get(shard_redirected); strings.Join(val, "") != "" {
 				addr := strings.Join(val, "")
 				co, has := mConn[addr]
@@ -73,7 +81,7 @@ func UnaryClientInterceptorV2() grpc.UnaryClientInterceptor {
 				err = invoker(ctx, method, req, reply, co, opts...)
 			}
 			if err != nil {
-				flog("[client] ", err)
+				log.Print("[client] ", err)
 				return err
 			}
 			if len(header[shard_addrs]) > 0 {
@@ -82,26 +90,29 @@ func UnaryClientInterceptorV2() grpc.UnaryClientInterceptor {
 				lock.RUnlock()
 			}
 			if len(addrs) == 0 {
-				flog(" [client] addrs still empty")
+				log.Print("[client] addrs still empty")
 			}
 			return nil
 		}
-
 		MAXREIES := 5
+		log.Print("adddddr: ", addrs)
 		var err error
 		var header metadata.MD
 		for i := 0; i < MAXREIES; i++ {
 			header, err = clientCustomInvoke(ctx, method, req, reply, cc, invoker, addrs, lock, mConn, opts...)
-			flog(" [client] client out", header, err)
+			log.Print(" [client] client out", header, err)
 			if err == nil {
 				if val := strings.Join(header[shard_redirected], ""); val == "" {
 					return err
 				}
+				// return nil
 			}
 			// header trigger
-			lock.RLock()
-			addrs = header[shard_addrs]
-			lock.RUnlock()
+			if len(header[shard_addrs]) > 0 {
+				lock.RLock()
+				addrs = header[shard_addrs]
+				lock.RUnlock()
+			}
 		}
 		return err
 	}

@@ -20,7 +20,7 @@ func init() {
 
 func TestCheckShardKey(t *testing.T) {
 	arr := []string{"a", "b"}
-	_, index := GetShardAddressFromShardKey("thanh1", arr)
+	_, index := GetShardAddressFromShardKey("thanh", arr)
 	log.Print(index)
 }
 
@@ -34,6 +34,7 @@ type TestShardApiServer struct {
 }
 
 func (me *TestShardApiServer) ListVisitors(ctx context.Context, req *pb.VisitorRequest) (*pb.Visitors, error) {
+	log.Print(ctx)
 	return &pb.Visitors{Total: 10}, nil
 }
 

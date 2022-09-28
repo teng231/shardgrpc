@@ -11,12 +11,12 @@ import (
 )
 
 const (
-	shard_key           = "s_key"
-	shard_addrs         = "s_addrs"
+	shard_key           = "s_key"   // shard key data
+	shard_addrs         = "s_addrs" // list address of grpc
 	shard_redirected    = "s_redirected"
-	shard_forwarded_for = "s_forwarded_for"
-	account_id          = "account_id"
-	shard_running       = "s_running"
+	shard_forwarded_for = "s_forwarded_for" // shard forward a -> b
+	shard_default_key   = "s_default_key"   // field default shardkey
+	shard_running       = "s_running"       // name shard run this request
 )
 
 var (

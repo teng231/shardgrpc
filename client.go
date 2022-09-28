@@ -3,7 +3,6 @@ package shardgrpc
 import (
 	"context"
 	"hash/crc32"
-	"log"
 	"reflect"
 	"strings"
 	"sync"
@@ -112,7 +111,6 @@ func getReturnType(server interface{}, fullmethod string) reflect.Type {
 }
 func GetServerShardKey(ctx context.Context, message interface{}) string {
 	md, _ := metadata.FromIncomingContext(ctx)
-	log.Print("income ", md)
 	if len(md[shard_key]) > 0 {
 		return md[shard_key][0]
 	}
@@ -120,17 +118,16 @@ func GetServerShardKey(ctx context.Context, message interface{}) string {
 		return ""
 	}
 	msgrefl := message.(proto.Message).ProtoReflect()
-	accIdDesc := msgrefl.Descriptor().Fields().ByName(account_id)
-	if accIdDesc == nil {
+	defShardKey := msgrefl.Descriptor().Fields().ByName(shard_default_key)
+	if defShardKey == nil {
 		return ""
 	}
 
-	return msgrefl.Get(accIdDesc).String()
+	return msgrefl.Get(defShardKey).String()
 }
 
 func GetClientShardKey(ctx context.Context, message interface{}) string {
 	md, _ := metadata.FromOutgoingContext(ctx)
-	log.Print("outgoing ", md)
 	if len(md[shard_key]) > 0 {
 		return md[shard_key][0]
 	}
@@ -138,10 +135,10 @@ func GetClientShardKey(ctx context.Context, message interface{}) string {
 		return ""
 	}
 	msgrefl := message.(proto.Message).ProtoReflect()
-	accIdDesc := msgrefl.Descriptor().Fields().ByName(account_id)
-	if accIdDesc == nil {
+	defShardKey := msgrefl.Descriptor().Fields().ByName(shard_default_key)
+	if defShardKey == nil {
 		return ""
 	}
 
-	return msgrefl.Get(accIdDesc).String()
+	return msgrefl.Get(defShardKey).String()
 }

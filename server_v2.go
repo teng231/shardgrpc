@@ -18,22 +18,29 @@ import (
 // the metadata, and inspect the context to receive the IP address that the
 // request was received from. We then modify the EdgeLocation type to include
 // this information for every request
-// in statefull pod-name hostname like: web-0, web-1, ... web-i
-func UnaryServerInterceptorV2Statefullset(hostname string, totalShard int) grpc.UnaryServerInterceptor {
+// in statefull pod-name hostname like: web-0:3456, web-1:3456, ... web-i:3456
+func UnaryServerInterceptorV2Statefullset(hostname, port string, totalShard int) grpc.UnaryServerInterceptor {
 	if hostname == "" {
 		hostname = os.Getenv("HOSTNAME")
 	}
 	arr := strings.Split(hostname, "-")
 	if len(arr) < 2 {
-		log.Panicf("hostname '%s' not valid form xxx-i", hostname)
+		log.Panicf("hostname '%s' not valid form xxx-i:PPPP", hostname)
 	}
-	index, err := strconv.Atoi(arr[len(arr)-1])
+	// get -> i:PPPP
+	indexPort := arr[len(arr)-1]
+	// get i
+	index, err := strconv.Atoi(strings.Split(indexPort, ":")[0])
 	if err != nil {
 		log.Panicf("hostname not include index, err: %s", err.Error())
 	}
 	serviceAddrs := []string{}
 	for i := 0; i < totalShard; i++ {
-		serviceAddrs = append(serviceAddrs, arr[0]+"-"+strconv.FormatInt(int64(i), 10))
+		// if i == 1 {
+		// 	serviceAddrs = append(serviceAddrs, arr[0]+"-"+strconv.FormatInt(int64(i), 10)+":21241")
+		// 	continue
+		// }
+		serviceAddrs = append(serviceAddrs, arr[0]+"-"+strconv.FormatInt(int64(i), 10)+":"+port)
 	}
 	return UnaryServerInterceptorV2(serviceAddrs, index)
 }
@@ -46,7 +53,9 @@ func UnaryServerInterceptorV2Statefullset(hostname string, totalShard int) grpc.
 func UnaryServerInterceptorV2(serviceAddrs []string, id int) grpc.UnaryServerInterceptor {
 	// holds the current maximum number of shards
 	// shardCount := len(serviceAddrs)
-
+	if len(serviceAddrs) == 0 {
+		panic("not found serviceAddrs")
+	}
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (out interface{}, err error) {
 		defer func() {
 			if r := recover(); r != nil {
@@ -56,10 +65,6 @@ func UnaryServerInterceptorV2(serviceAddrs []string, id int) grpc.UnaryServerInt
 		flog(" [server] run heree ", serviceAddrs[id])
 		// Get the metadata from the incoming context
 		md, ok := metadata.FromIncomingContext(ctx)
-		// non-sharding normal process
-		if len(md[shard_running]) == 0 {
-			handler(ctx, req)
-		}
 		if !ok {
 			return nil, fmt.Errorf("couldn't parse incoming context metadata")
 		}
@@ -69,8 +74,10 @@ func UnaryServerInterceptorV2(serviceAddrs []string, id int) grpc.UnaryServerInt
 		// recheck `shard_key` extractlly
 		// if calcId not equal with id. need forward to extract grpc server.
 		extractAddr, sNum := GetShardAddressFromShardKey(skey, serviceAddrs)
+		log.Print(extractAddr, " ", skey, " ", serviceAddrs)
 		header := metadata.New(nil)
 		header.Set(shard_addrs, serviceAddrs...)
+		header.Set(shard_running, extractAddr)
 		// if extract shard id with be processed
 		if sNum == id {
 			grpc.SendHeader(ctx, header)
