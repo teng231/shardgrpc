@@ -34,7 +34,7 @@ type TestShardApiServer struct {
 }
 
 func (me *TestShardApiServer) ListVisitors(ctx context.Context, req *pb.VisitorRequest) (*pb.Visitors, error) {
-	log.Print(ctx)
+	// log.Print(ctx)
 	return &pb.Visitors{Total: 10}, nil
 }
 

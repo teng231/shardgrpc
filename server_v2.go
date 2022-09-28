@@ -37,10 +37,14 @@ func UnaryServerInterceptorV2Statefullset(hostname, port string, totalShard int)
 	serviceAddrs := []string{}
 	for i := 0; i < totalShard; i++ {
 		// if i == 1 {
-		// 	serviceAddrs = append(serviceAddrs, arr[0]+"-"+strconv.FormatInt(int64(i), 10)+":21241")
+		// 	serviceAddrs = append(serviceAddrs, arr[0]+"-"+strconv.Itoa(i)+":21241")
 		// 	continue
 		// }
-		serviceAddrs = append(serviceAddrs, arr[0]+"-"+strconv.FormatInt(int64(i), 10)+":"+port)
+		// if i == 0 {
+		// 	serviceAddrs = append(serviceAddrs, arr[0]+"-"+strconv.Itoa(i)+":21240")
+		// 	continue
+		// }
+		serviceAddrs = append(serviceAddrs, arr[0]+"-"+strconv.Itoa(i)+":"+port)
 	}
 	return UnaryServerInterceptorV2(serviceAddrs, index)
 }
@@ -74,10 +78,10 @@ func UnaryServerInterceptorV2(serviceAddrs []string, id int) grpc.UnaryServerInt
 		// recheck `shard_key` extractlly
 		// if calcId not equal with id. need forward to extract grpc server.
 		extractAddr, sNum := GetShardAddressFromShardKey(skey, serviceAddrs)
-		log.Print(extractAddr, " ", skey, " ", serviceAddrs)
+		log.Print(serviceAddrs[id], " ", skey, " ", serviceAddrs)
 		header := metadata.New(nil)
 		header.Set(shard_addrs, serviceAddrs...)
-		header.Set(shard_running, extractAddr)
+		header.Set(shard_running, serviceAddrs[id])
 		// if extract shard id with be processed
 		if sNum == id {
 			grpc.SendHeader(ctx, header)

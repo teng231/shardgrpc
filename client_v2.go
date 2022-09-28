@@ -95,7 +95,6 @@ func UnaryClientInterceptorV2() grpc.UnaryClientInterceptor {
 			return nil
 		}
 		MAXREIES := 5
-		log.Print("adddddr: ", addrs)
 		var err error
 		var header metadata.MD
 		for i := 0; i < MAXREIES; i++ {
