@@ -26,27 +26,25 @@ func UnaryServerInterceptorV2Statefullset(hostname, port, serviceDomain string, 
 	}
 	arr := strings.Split(hostname, "-")
 	if len(arr) < 2 {
-		log.Panicf("hostname '%s' not valid form xxx-i:PPPP", hostname)
+		log.Panicf("hostname '%s' not valid form xxx-i", hostname)
 	}
-	// get -> i:PPPP
-	indexPort := arr[len(arr)-1]
-	// get i
-	index, err := strconv.Atoi(strings.Split(indexPort, ":")[0])
+	app := strings.Join(arr[:len(arr)-1], "-")
+	index, err := strconv.Atoi(arr[len(arr)-1])
 	if err != nil {
 		log.Panicf("hostname not include index, err: %s", err.Error())
 	}
 	serviceAddrs := []string{}
 	for i := 0; i < totalShard; i++ {
 		// if i == 1 {
-		// 	serviceAddrs = append(serviceAddrs, arr[0]+"-"+strconv.Itoa(i)+":21241")
+		// 	serviceAddrs = append(serviceAddrs,app+"-"+strconv.Itoa(i)+":21241")
 		// 	continue
 		// }
 		// if i == 0 {
-		// 	serviceAddrs = append(serviceAddrs, arr[0]+"-"+strconv.Itoa(i)+":21240")
+		// 	serviceAddrs = append(serviceAddrs, app+"-"+strconv.Itoa(i)+":21240")
 		// 	continue
 		// }
 		// like a12-getcode-0.a12.staging.svc.cluster.local:6000
-		serviceAddrs = append(serviceAddrs, arr[0]+"-"+strconv.Itoa(i)+"."+serviceDomain+":"+port)
+		serviceAddrs = append(serviceAddrs, app+"-"+strconv.Itoa(i)+"."+serviceDomain+":"+port)
 	}
 	return UnaryServerInterceptorV2(serviceAddrs, index)
 }

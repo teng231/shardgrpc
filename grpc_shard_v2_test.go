@@ -194,13 +194,37 @@ func TestNotShardServerV2WithNormalcase(t *testing.T) {
 }
 
 func TestResolveHost(t *testing.T) {
-	hostname := "a12-service-1"
+	serviceDomain := "a12.staging.cluster.local"
+	port := "6000"
+	hostname := "a12-getcode-1"
 	arr := strings.Split(hostname, "-")
+	// app, index
+	// parts := strings.Split(hostname, "-")
 	if len(arr) < 2 {
 		log.Panicf("hostname '%s' not valid form xxx-i", hostname)
 	}
+	app := strings.Join(arr[:len(arr)-1], "-")
+	// get -> i:PPPP
+
+	// get i
 	index, err := strconv.Atoi(arr[len(arr)-1])
-	log.Print(index, err)
+	if err != nil {
+		log.Panicf("hostname not include index, err: %s", err.Error())
+	}
+	serviceAddrs := []string{}
+	for i := 0; i < 5; i++ {
+		// if i == 1 {
+		// 	serviceAddrs = append(serviceAddrs, arr[0]+"-"+strconv.Itoa(i)+":21241")
+		// 	continue
+		// }
+		// if i == 0 {
+		// 	serviceAddrs = append(serviceAddrs, arr[0]+"-"+strconv.Itoa(i)+":21240")
+		// 	continue
+		// }
+		// like a12-getcode-0.a12.staging.svc.cluster.local:6000
+		serviceAddrs = append(serviceAddrs, app+"-"+strconv.Itoa(i)+"."+serviceDomain+":"+port)
+	}
+	log.Print(serviceAddrs, index)
 }
 func (me TestShardApiServer) ServeV1(hostname, port string, shardcount int) {
 	lis, err := net.Listen("tcp", hostname+":"+port)
@@ -212,7 +236,7 @@ func (me TestShardApiServer) ServeV1(hostname, port string, shardcount int) {
 			MaxConnectionAge: 30 * time.Second,
 		}),
 		grpc.UnaryInterceptor(
-			UnaryServerInterceptorV2Statefullset(hostname, port, shardcount),
+			UnaryServerInterceptorV2Statefullset(hostname, port, "", shardcount),
 		),
 	}
 	grpcServer := grpc.NewServer(opts...)
