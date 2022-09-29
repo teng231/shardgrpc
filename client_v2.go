@@ -99,7 +99,7 @@ func UnaryClientInterceptorV2() grpc.UnaryClientInterceptor {
 		var header metadata.MD
 		for i := 0; i < MAXREIES; i++ {
 			header, err = clientCustomInvoke(ctx, method, req, reply, cc, invoker, addrs, lock, mConn, opts...)
-			log.Print(" [client] client out", header, err)
+			flog(" [client] client out", header, err)
 			if err == nil {
 				if val := strings.Join(header[shard_redirected], ""); val == "" {
 					return err
