@@ -19,7 +19,8 @@ import (
 // request was received from. We then modify the EdgeLocation type to include
 // this information for every request
 // in statefull pod-name hostname like: web-0:3456, web-1:3456, ... web-i:3456
-func UnaryServerInterceptorV2Statefullset(hostname, port string, totalShard int) grpc.UnaryServerInterceptor {
+// serviceDomain like a12.staging.svc.cluster.local
+func UnaryServerInterceptorV2Statefullset(hostname, port, serviceDomain string, totalShard int) grpc.UnaryServerInterceptor {
 	if hostname == "" {
 		hostname = os.Getenv("HOSTNAME")
 	}
@@ -44,7 +45,8 @@ func UnaryServerInterceptorV2Statefullset(hostname, port string, totalShard int)
 		// 	serviceAddrs = append(serviceAddrs, arr[0]+"-"+strconv.Itoa(i)+":21240")
 		// 	continue
 		// }
-		serviceAddrs = append(serviceAddrs, arr[0]+"-"+strconv.Itoa(i)+":"+port)
+		// like a12-getcode-0.a12.staging.svc.cluster.local:6000
+		serviceAddrs = append(serviceAddrs, arr[0]+"-"+strconv.Itoa(i)+"."+serviceDomain+":"+port)
 	}
 	return UnaryServerInterceptorV2(serviceAddrs, index)
 }
