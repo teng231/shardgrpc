@@ -9,12 +9,17 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/resolver"
 )
 
 // func appendToOutgoingContext(ctx context.Context, key, value string) context.Context {
 // 	ctx = metadata.AppendToOutgoingContext(ctx, key, string(value))
 // 	return ctx
 // }
+func init() {
+	resolver.SetDefaultScheme("dns")
+	log.SetFlags(log.Lshortfile)
+}
 
 func clientCustomInvoke(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, addrs []string, lock *sync.RWMutex, mConn map[string]*grpc.ClientConn, opts ...grpc.CallOption) (metadata.MD, error) {
 	// calculate shard key to find extract server
@@ -32,7 +37,10 @@ func clientCustomInvoke(ctx context.Context, method string, req, reply interface
 	lock.RUnlock()
 	if !has {
 		var err error
-		co, err = grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		co, err = grpc.Dial(addr,
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+			CreateKeepAlive(),
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -70,7 +78,10 @@ func UnaryClientInterceptorV2() grpc.UnaryClientInterceptor {
 				co, has := mConn[addr]
 				if !has {
 					var err error
-					co, err = grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+					co, err = grpc.Dial(addr,
+						grpc.WithTransportCredentials(insecure.NewCredentials()),
+						CreateKeepAlive(),
+					)
 					if err != nil {
 						return err
 					}
