@@ -12,6 +12,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
+	"google.golang.org/grpc/resolver"
 )
 
 const (
@@ -22,6 +23,11 @@ const (
 	shard_default_key   = "s_default_key"   // field default shardkey
 	shard_running       = "s_running"       // name shard run this request
 )
+
+func init() {
+	resolver.SetDefaultScheme("dns")
+	log.SetFlags(log.Lshortfile)
+}
 
 var (
 	enableLog = os.Getenv("SHARD_ENABLE_LOG") == "true"
