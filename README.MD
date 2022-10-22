@@ -1,5 +1,7 @@
 ### SHARD_GRPC
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/princjef/gomarkdoc.svg)](https://pkg.go.dev/github.com/teng231/shardgrpc)
+
 ### Structure
 
 ![https://res.cloudinary.com/telosma/image/upload/v1666462690/Screen_Shot_2022-10-23_at_01.14.48_rsqliz.png](https://res.cloudinary.com/telosma/image/upload/v1666462690/Screen_Shot_2022-10-23_at_01.14.48_rsqliz.png)
