@@ -76,7 +76,7 @@ func (me TestShardApiServer) ServeV0(id int) {
 }
 
 // clientshard -> servershard
-func TestShardServerAndClientv2(t *testing.T) {
+func TestShardServerAndClient(t *testing.T) {
 	server0 := &TestShardApiServer{shards: []string{":21250", ":21251"}}
 	go server0.ServeV2(0)
 
@@ -86,7 +86,15 @@ func TestShardServerAndClientv2(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	conn, err := grpc.Dial(":21251",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithUnaryInterceptor(UnaryClientInterceptorV2()))
+		grpc.WithUnaryInterceptor(UnaryClientInterceptor(
+			&DialConfig{ThrottlingDuration: 10 * time.Millisecond, MaxRetryConnect: 3},
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithKeepaliveParams(keepalive.ClientParameters{
+				Time:                10 * time.Second,
+				Timeout:             20 * time.Second,
+				PermitWithoutStream: true,
+			}),
+		)))
 	if err != nil {
 		panic(err)
 	}
@@ -270,8 +278,10 @@ func TestShardServerV2StateFull(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 	conn, err := grpc.Dial("lhost-0:21240",
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithUnaryInterceptor(UnaryClientInterceptorV2()))
+		grpc.WithUnaryInterceptor(UnaryClientInterceptor(
+			&DialConfig{ThrottlingDuration: 10 * time.Millisecond, MaxRetryConnect: 3},
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+		)))
 	if err != nil {
 		panic(err)
 	}
@@ -305,4 +315,40 @@ func TestShardServerV2StateFull(t *testing.T) {
 
 	// 	t.Fatal("SHOULD RETURN SHARD NUM", strings.Join(header2.Get("shard_addrs"), ","))
 	// }
+}
+
+func TestShardServerAndClientNotResolve(t *testing.T) {
+	server0 := &TestShardApiServer{shards: []string{":21250", ":21251"}}
+	go server0.ServeV2(0)
+
+	server1 := &TestShardApiServer{shards: []string{":21250", ":21251"}}
+	go server1.ServeV2(1)
+
+	time.Sleep(100 * time.Millisecond)
+	conn, err := grpc.Dial(":21250",
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithUnaryInterceptor(UnaryClientInterceptor(
+			&DialConfig{ThrottlingDuration: 10 * time.Millisecond, MaxRetryConnect: 3},
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+		)))
+	if err != nil {
+		panic(err)
+	}
+	client := pb.NewVistorServiceClient(conn)
+	time.Sleep(2 * time.Second)
+	// correct server
+	var header metadata.MD // variable to store header and trailer
+	c, cancel := MakeContext(20, nil)
+	defer cancel()
+	c = metadata.AppendToOutgoingContext(c, "s_key", "thanh")
+	resp, err := client.ListVisitors(c, &pb.VisitorRequest{AccountId: "thanh"}, grpc.Header(&header))
+	// log.Print("header", header)
+	log.Print(resp, err, header)
+	if err != nil {
+		log.Print(err)
+	}
+	if resp.Total == 0 {
+		t.Fail()
+	}
+	log.Print("------------------------------------------------------------------------------------------------")
 }

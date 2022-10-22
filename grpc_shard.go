@@ -8,10 +8,7 @@ import (
 	"encoding/json"
 	"log"
 	"os"
-	"time"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -43,12 +40,4 @@ func flog(data ...interface{}) {
 		return
 	}
 	log.Print(data...)
-}
-
-func CreateKeepAlive() grpc.DialOption {
-	return grpc.WithKeepaliveParams(keepalive.ClientParameters{
-		Time:                10 * time.Second,
-		Timeout:             20 * time.Second,
-		PermitWithoutStream: true,
-	})
 }
