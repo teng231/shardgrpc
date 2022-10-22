@@ -278,6 +278,7 @@ func TestShardServerV2StateFull(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 	conn, err := grpc.Dial("lhost-0:21240",
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithUnaryInterceptor(UnaryClientInterceptor(
 			&DialConfig{ThrottlingDuration: 10 * time.Millisecond, MaxRetryConnect: 3},
 			grpc.WithTransportCredentials(insecure.NewCredentials()),

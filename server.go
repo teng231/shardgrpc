@@ -54,7 +54,7 @@ func UnaryServerInterceptorStatefullset(hostname, port, serviceDomain string, to
 	serviceAddrs := []string{}
 	for i := 0; i < totalShard; i++ {
 		// if i == 1 {
-		// 	serviceAddrs = append(serviceAddrs,app+"-"+strconv.Itoa(i)+":21241")
+		// 	serviceAddrs = append(serviceAddrs, app+"-"+strconv.Itoa(i)+":21241")
 		// 	continue
 		// }
 		// if i == 0 {
