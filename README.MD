@@ -1,5 +1,73 @@
 ### SHARD_GRPC
 
+### Structure
+
+![https://res.cloudinary.com/telosma/image/upload/v1666462690/Screen_Shot_2022-10-23_at_01.14.48_rsqliz.png](https://res.cloudinary.com/telosma/image/upload/v1666462690/Screen_Shot_2022-10-23_at_01.14.48_rsqliz.png)
+
+### Required
+
+- Recommend server need using `statefulset` for easy routing.
+- GRPC server need install in big machine(pod/service) for high perfomance.
+
+### Install
+
+```bash
+    go get github.com/teng231/shardgrpc
+```
+
+- Using for client:
+example
+```go
+    // for example
+    conn, err := grpc.Dial("lhost-0:21240",
+        grpc.WithTransportCredentials(insecure.NewCredentials()),
+        grpc.WithUnaryInterceptor(UnaryClientInterceptor(
+            &DialConfig{ThrottlingDuration: 10 * time.Millisecond, MaxRetryConnect: 3},
+            grpc.WithTransportCredentials(insecure.NewCredentials()),
+        )))
+    if err != nil {
+        panic(err)
+    }
+    client := pb.NewVistorServiceClient(conn)
+```
+
+send request in process
+
+```go
+    // ...
+    var header metadata.MD // variable to store header and trailer
+    c, cancel := MakeContext(20, nil)
+    defer cancel()
+    c = metadata.AppendToOutgoingContext(c, "s_key", "teng")
+    resp, err := client.ListVisitors(c, &pb.VisitorRequest{AccountId: "teng"}, grpc.Header(&header))
+    // log.Print("header", header)
+    log.Print(resp, err, header)
+    if err != nil {
+        log.Print(err)
+    }
+```
+
+- Using for server:
+example
+```go
+    func (me TestShardApiServer) ServeV1(hostname, port string, shardcount int) {
+        lis, err := net.Listen("tcp", hostname+":"+port)
+        if err != nil {
+            panic(err)
+        }
+        opts := []grpc.ServerOption{
+            grpc.KeepaliveParams(keepalive.ServerParameters{
+                MaxConnectionAge: 30 * time.Second,
+            }),
+            grpc.UnaryInterceptor(
+                UnaryServerInterceptorStatefullset(hostname, port, "", shardcount),
+            ),
+        }
+        grpcServer := grpc.NewServer(opts...)
+        pb.RegisterVistorServiceServer(grpcServer, &me)
+        grpcServer.Serve(lis)
+    }
+```
 
 ### REFERENCES:
 
