@@ -112,6 +112,9 @@ func UnaryClientInterceptor(dialConfig *DialConfig, dialOpts ...grpc.DialOption)
 		// var header metadata.MD // variable to store header and trailer
 		opts = append([]grpc.CallOption{grpc.Header(&header)}, opts...)
 		err = co.Invoke(ctx, method, req, reply, opts...)
+		if err != nil {
+			log.Print("[shard] address change:", err.Error())
+		}
 		return err
 	}
 }

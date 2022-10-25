@@ -28,11 +28,11 @@ func TestCheckShardKey(t *testing.T) {
 }
 
 type TestCacheApiServer struct {
-	ncall int
+	// ncall int
 }
 
 type TestShardApiServer struct {
-	id     int
+	// id     int
 	shards []string
 }
 

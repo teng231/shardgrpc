@@ -5,7 +5,6 @@
 package shardgrpc
 
 import (
-	"encoding/json"
 	"log"
 	"os"
 
@@ -30,10 +29,10 @@ var (
 	enableLog = os.Getenv("SHARD_ENABLE_LOG") == "true"
 )
 
-func jlog(i interface{}) {
-	bin, _ := json.MarshalIndent(i, " ", " ")
-	log.Print(string(bin))
-}
+// func jlog(i interface{}) {
+// 	bin, _ := json.MarshalIndent(i, " ", " ")
+// 	log.Print(string(bin))
+// }
 
 func flog(data ...interface{}) {
 	if !enableLog {
