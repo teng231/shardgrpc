@@ -18,6 +18,7 @@ import (
 type DialConfig struct {
 	MaxRetryConnect    int
 	ThrottlingDuration time.Duration
+	DefaultDNS         string
 }
 
 func GetShardAddressFromShardKey(skey string, addrs []string) (string, int) {
@@ -71,6 +72,10 @@ func UnaryClientInterceptor(dialConfig *DialConfig, dialOpts ...grpc.DialOption)
 			// automatic call to grpc server
 			err := invoker(ctx, method, req, reply, cc, opts...)
 			if err != nil {
+				err = tryInvoke(func(cc *grpc.ClientConn) error {
+					err = cc.Invoke(ctx, method, req, reply, opts...)
+					return err
+				}, lock, mConn, dialConfig.DefaultDNS, dialConfig, dialOpts...)
 				log.Print(err)
 			}
 			// if header have shard_redirect value is need change process
@@ -89,7 +94,7 @@ func UnaryClientInterceptor(dialConfig *DialConfig, dialOpts ...grpc.DialOption)
 					// lock.Unlock()
 					// co = _co
 					tryInvoke(func(cc *grpc.ClientConn) error {
-						err = co.Invoke(ctx, method, req, reply, opts...)
+						err = cc.Invoke(ctx, method, req, reply, opts...)
 						return err
 					}, lock, mConn, addr, dialConfig, dialOpts...)
 				} else {
@@ -137,7 +142,7 @@ func UnaryClientInterceptor(dialConfig *DialConfig, dialOpts ...grpc.DialOption)
 			log.Print("+++ Connection break: maybe some ip changed +++")
 			// need retry now
 			err = tryInvoke(func(cc *grpc.ClientConn) error {
-				err = co.Invoke(ctx, method, req, reply, opts...)
+				err = cc.Invoke(ctx, method, req, reply, opts...)
 				return err
 			}, lock, mConn, addr, dialConfig, dialOpts...)
 		}
