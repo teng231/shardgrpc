@@ -27,18 +27,30 @@ func GetShardAddressFromShardKey(skey string, addrs []string) (string, int) {
 	return host, index
 }
 
-func tryConnect(addr string, dialConfig *DialConfig, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
+func tryDial(addr string, dialConfig *DialConfig, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
 	for i := 0; i < dialConfig.MaxRetryConnect; i++ {
 		co, err := grpc.Dial(addr, opts...)
-		log.Print("try ....")
-		// grpc.WithTransportCredentials(insecure.NewCredentials()),
-		// CreateKeepAlive(),
 		if err == nil {
 			return co, nil
 		}
 		time.Sleep(dialConfig.ThrottlingDuration)
 	}
 	return nil, errors.New("can't retry connection to: " + addr)
+}
+
+func tryInvoke(fnInvoke func(cc *grpc.ClientConn) error,
+	lock *sync.RWMutex, mConn map[string]*grpc.ClientConn, addr string, dialConfig *DialConfig,
+	opts ...grpc.DialOption) error {
+	co, err := tryDial(addr, dialConfig, opts...)
+	if err != nil {
+		return err
+	}
+	lock.Lock()
+	mConn[addr] = co
+	lock.Unlock()
+	log.Print("retry invoke")
+	err = fnInvoke(co)
+	return err
 }
 
 // UnaryClientInterceptor is called on every request from a client to a unary
@@ -58,6 +70,9 @@ func UnaryClientInterceptor(dialConfig *DialConfig, dialOpts ...grpc.DialOption)
 			opts = append(opts, grpc.Header(&header))
 			// automatic call to grpc server
 			err := invoker(ctx, method, req, reply, cc, opts...)
+			if err != nil {
+				log.Print(err)
+			}
 			// if header have shard_redirect value is need change process
 			if val := header.Get(shard_redirected); strings.Join(val, "") != "" {
 				addr := strings.Join(val, "")
@@ -65,16 +80,22 @@ func UnaryClientInterceptor(dialConfig *DialConfig, dialOpts ...grpc.DialOption)
 				co, has := mConn[addr]
 				lock.RUnlock()
 				if !has {
-					_co, err := tryConnect(addr, dialConfig, dialOpts...)
-					if err != nil {
+					// _co, err := tryDial(addr, dialConfig, dialOpts...)
+					// if err != nil {
+					// 	return err
+					// }
+					// lock.Lock()
+					// mConn[addr] = _co
+					// lock.Unlock()
+					// co = _co
+					tryInvoke(func(cc *grpc.ClientConn) error {
+						err = co.Invoke(ctx, method, req, reply, opts...)
 						return err
-					}
-					lock.Lock()
-					mConn[addr] = _co
-					lock.Unlock()
-					co = _co
+					}, lock, mConn, addr, dialConfig, dialOpts...)
+				} else {
+					err = co.Invoke(ctx, method, req, reply, opts...)
 				}
-				err = co.Invoke(ctx, method, req, reply, opts...)
+
 			}
 			if err != nil {
 				log.Print("[client] ", err)
@@ -101,7 +122,7 @@ func UnaryClientInterceptor(dialConfig *DialConfig, dialOpts ...grpc.DialOption)
 		co, has := mConn[addr]
 		lock.RUnlock()
 		if !has {
-			co, err = tryConnect(addr, dialConfig, dialOpts...)
+			co, err = tryDial(addr, dialConfig, dialOpts...)
 			if err != nil {
 				return err
 			}
@@ -113,7 +134,12 @@ func UnaryClientInterceptor(dialConfig *DialConfig, dialOpts ...grpc.DialOption)
 		opts = append([]grpc.CallOption{grpc.Header(&header)}, opts...)
 		err = co.Invoke(ctx, method, req, reply, opts...)
 		if err != nil {
-			log.Print("[shard] address change:", err.Error())
+			log.Print("+++ Connection break: maybe some ip changed +++")
+			// need retry now
+			err = tryInvoke(func(cc *grpc.ClientConn) error {
+				err = co.Invoke(ctx, method, req, reply, opts...)
+				return err
+			}, lock, mConn, addr, dialConfig, dialOpts...)
 		}
 		return err
 	}
