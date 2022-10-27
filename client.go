@@ -21,6 +21,10 @@ type DialConfig struct {
 	DefaultDNS         string
 }
 
+const (
+	TransportError = "transport: error while dialing"
+)
+
 func GetShardAddressFromShardKey(skey string, addrs []string) (string, int) {
 	index := int(crc32.ChecksumIEEE([]byte(skey))) % len(addrs)
 	flog(skey, " ", index)
@@ -139,6 +143,9 @@ func UnaryClientInterceptor(dialConfig *DialConfig, dialOpts ...grpc.DialOption)
 		opts = append([]grpc.CallOption{grpc.Header(&header)}, opts...)
 		err = co.Invoke(ctx, method, req, reply, opts...)
 		if err != nil {
+			if !strings.Contains(strings.ToLower(err.Error()), TransportError) {
+				return err
+			}
 			log.Print("+++ Connection break: maybe some ip changed +++")
 			// need retry now
 			err = tryInvoke(func(cc *grpc.ClientConn) error {
