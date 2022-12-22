@@ -40,6 +40,10 @@ func (me *TestShardApiServer) ListVisitors(ctx context.Context, req *pb.VisitorR
 	// log.Print(ctx)
 	return &pb.Visitors{Total: 10}, nil
 }
+func (me *TestShardApiServer) Ping(ctx context.Context, req *pb.Empty) (*pb.Empty, error) {
+	// log.Print(ctx)
+	return &pb.Empty{}, nil
+}
 
 func MakeContext(sec int, claims interface{}) (context.Context, context.CancelFunc) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(sec)*time.Second)

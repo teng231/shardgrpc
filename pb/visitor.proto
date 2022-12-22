@@ -7,6 +7,7 @@ option go_package = "github.com/teng231/shardgrpc/pb";
 
 service VistorService {
     rpc ListVisitors(VisitorRequest) returns (Visitors);
+    rpc Ping(Empty) returns (Empty);
 }
 
 

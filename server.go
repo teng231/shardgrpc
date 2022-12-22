@@ -27,7 +27,6 @@ func GetServerShardKey(ctx context.Context, message interface{}) string {
 	if defShardKey == nil {
 		return ""
 	}
-
 	return msgrefl.Get(defShardKey).String()
 }
 
