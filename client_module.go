@@ -13,6 +13,8 @@ import (
 type IClient interface {
 	UnaryClientInterceptor(dialConfig *DialConfig, dialOpts ...grpc.DialOption) grpc.UnaryClientInterceptor
 	GetShardCount() int
+	GetAddrs() []string
+	CalcShardIndexByKey(key string) int
 }
 
 type Client struct {
@@ -32,6 +34,15 @@ func CreateShardClient() *Client {
 
 func (s *Client) GetShardCount() int {
 	return len(s.addrs)
+}
+
+func (s *Client) GetAddrs() []string {
+	return s.addrs
+}
+
+func (s *Client) CalcShardIndexByKey(key string) int {
+	_, index := GetShardAddressFromShardKey(key, s.addrs)
+	return index
 }
 
 // UnaryClientInterceptor is called on every request from a client to a unary
