@@ -41,7 +41,7 @@ func (s *Client) GetAddrs() []string {
 }
 
 func (s *Client) CalcShardIndexByKey(key string) int {
-	_, index := GetShardAddressFromShardKey(key, s.addrs)
+	_, index := calcAddress(key, s.addrs)
 	return index
 }
 
@@ -101,7 +101,7 @@ func (s *Client) UnaryClientInterceptor(dialConfig *DialConfig, dialOpts ...grpc
 		if len(s.addrs) == 0 {
 			panic("not found addrs")
 		}
-		addr, _ := GetShardAddressFromShardKey(skey, s.addrs)
+		addr, _ := calcAddress(skey, s.addrs)
 		s.lock.RLock()
 		co, has := s.mConn[addr]
 		s.lock.RUnlock()

@@ -11,39 +11,38 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/protobuf/proto"
 )
 
-func GetServerShardKey(ctx context.Context, message interface{}) string {
-	md, _ := metadata.FromIncomingContext(ctx)
-	if len(md[shard_key]) > 0 {
-		return md[shard_key][0]
-	}
-	if message == nil {
-		return ""
-	}
-	msgrefl := message.(proto.Message).ProtoReflect()
-	defShardKey := msgrefl.Descriptor().Fields().ByName(shard_default_key)
-	if defShardKey == nil {
-		return ""
-	}
-	return msgrefl.Get(defShardKey).String()
-}
+// func GetServerShardKey(ctx context.Context, message interface{}) string {
+// 	md, _ := metadata.FromIncomingContext(ctx)
+// 	if len(md[shard_key]) > 0 {
+// 		return md[shard_key][0]
+// 	}
+// 	if message == nil {
+// 		return ""
+// 	}
+// 	msgrefl := message.(proto.Message).ProtoReflect()
+// 	defShardKey := msgrefl.Descriptor().Fields().ByName(shard_default_key)
+// 	if defShardKey == nil {
+// 		return ""
+// 	}
+// 	return msgrefl.Get(defShardKey).String()
+// }
 
-func GetShardIndex(hostname string) int {
-	if hostname == "" {
-		hostname = os.Getenv("HOSTNAME")
-	}
-	arr := strings.Split(hostname, "-")
-	if len(arr) < 2 {
-		log.Panicf("hostname '%s' not valid form xxx-i", hostname)
-	}
-	index, err := strconv.Atoi(arr[len(arr)-1])
-	if err != nil {
-		log.Panicf("hostname not include index, err: %s", err.Error())
-	}
-	return index
-}
+// func GetShardIndex(hostname string) int {
+// 	if hostname == "" {
+// 		hostname = os.Getenv("HOSTNAME")
+// 	}
+// 	arr := strings.Split(hostname, "-")
+// 	if len(arr) < 2 {
+// 		log.Panicf("hostname '%s' not valid form xxx-i", hostname)
+// 	}
+// 	index, err := strconv.Atoi(arr[len(arr)-1])
+// 	if err != nil {
+// 		log.Panicf("hostname not include index, err: %s", err.Error())
+// 	}
+// 	return index
+// }
 
 // UnaryServerInterceptorStatefullset is called on every request received from a client to a
 // unary server operation, here, we pull out the client operating system from
@@ -107,11 +106,10 @@ func UnaryServerInterceptor(serviceAddrs []string, id int) grpc.UnaryServerInter
 		}
 		flog("[server] ", header)
 		// want get from md `shard_key`
-		skey := GetServerShardKey(ctx, req)
+		skey := serverShardKey(ctx, req)
 		// recheck `shard_key` extractlly
 		// if calcId not equal with id. need forward to extract grpc server.
-		extractAddr, sNum := GetShardAddressFromShardKey(skey, serviceAddrs)
-		flog(serviceAddrs[id], " ", skey, " ", serviceAddrs)
+		extractAddr, sNum := calcAddress(skey, serviceAddrs)
 		header.Set(shard_addrs, serviceAddrs...)
 		header.Set(shard_running, serviceAddrs[id])
 		// if extract shard id with be processed

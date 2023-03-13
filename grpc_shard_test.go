@@ -23,7 +23,7 @@ func init() {
 
 func TestCheckShardKey(t *testing.T) {
 	arr := []string{"a", "b"}
-	_, index := GetShardAddressFromShardKey("thanh", arr)
+	_, index := calcAddress("thanh", arr)
 	log.Print(index)
 }
 

@@ -3,7 +3,6 @@ package shardgrpc
 import (
 	"context"
 	"errors"
-	"hash/crc32"
 	"log"
 	"reflect"
 	"strings"
@@ -25,12 +24,12 @@ const (
 	TransportError = "transport: error while dialing"
 )
 
-func GetShardAddressFromShardKey(skey string, addrs []string) (string, int) {
-	index := int(crc32.ChecksumIEEE([]byte(skey))) % len(addrs)
-	flog(skey, " ", index)
-	host := addrs[index]
-	return host, index
-}
+// func GetShardAddressFromShardKey(skey string, addrs []string) (string, int) {
+// 	index := int(crc32.ChecksumIEEE([]byte(skey))) % len(addrs)
+// 	flog(skey, " ", index)
+// 	host := addrs[index]
+// 	return host, index
+// }
 
 func tryDial(addr string, dialConfig *DialConfig, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
 	for i := 0; i < dialConfig.MaxRetryConnect; i++ {
@@ -126,7 +125,7 @@ func UnaryClientInterceptor(dialConfig *DialConfig, dialOpts ...grpc.DialOption)
 		if len(addrs) == 0 {
 			panic("not found addrs")
 		}
-		addr, _ := GetShardAddressFromShardKey(skey, addrs)
+		addr, _ := calcAddress(skey, addrs)
 		lock.RLock()
 		co, has := mConn[addr]
 		lock.RUnlock()
@@ -160,9 +159,10 @@ func UnaryClientInterceptor(dialConfig *DialConfig, dialOpts ...grpc.DialOption)
 // getReturnType returns the return types for a GRPC method
 // the method name should be full method name (i.e., /package.service/method)
 // For example, with handler
-//   (s *server) func Goodbye() string {}
-//   (s *server) func Ping(_ context.Context, _ *pb.Ping) (*pb.Pong, error) {}
-//   (s *server) func Hello(_ context.Context, _ *pb.Empty) (*pb.String, error) {}
+//
+//	(s *server) func Goodbye() string {}
+//	(s *server) func Ping(_ context.Context, _ *pb.Ping) (*pb.Pong, error) {}
+//	(s *server) func Hello(_ context.Context, _ *pb.Empty) (*pb.String, error) {}
 func getReturnType(server interface{}, fullmethod string) reflect.Type {
 	flog(server, "  ", fullmethod)
 	t := reflect.TypeOf(server)

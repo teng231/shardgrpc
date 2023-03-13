@@ -10,7 +10,7 @@ func TestShardIndex(t *testing.T) {
 		// "a19-getlink-XDS32-1s3r": 0,
 	}
 	for host, index := range cases {
-		i := GetShardIndex(host)
+		i := shardIndex(host)
 		if i != index {
 			t.Fail()
 		}
