@@ -102,7 +102,7 @@ func (s *Client) UnaryClientInterceptor(dialConfig *DialConfig, dialOpts ...grpc
 				return fmt.Errorf("connect addrs fail %s", err.Error())
 			}
 			s.lock.Lock()
-			s.mConn[addr] = co
+			s.mConn[addr] = newConn
 			co = newConn
 			s.lock.Unlock()
 		}
