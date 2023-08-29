@@ -97,12 +97,13 @@ func (s *Client) UnaryClientInterceptor(dialConfig *DialConfig, dialOpts ...grpc
 		co, has := s.mConn[addr]
 		s.lock.RUnlock()
 		if !has {
-			co, err := grpc.Dial(addr, dialOpts...)
+			newConn, err := grpc.Dial(addr, dialOpts...)
 			if err != nil {
 				return fmt.Errorf("connect addrs fail %s", err.Error())
 			}
 			s.lock.Lock()
 			s.mConn[addr] = co
+			co = newConn
 			s.lock.Unlock()
 		}
 		// var header metadata.MD // variable to store header and trailer
