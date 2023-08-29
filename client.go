@@ -3,15 +3,14 @@ package shardgrpc
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
-	"reflect"
 	"strings"
 	"sync"
 	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/protobuf/proto"
 )
 
 type DialConfig struct {
@@ -24,37 +23,29 @@ const (
 	TransportError = "transport: error while dialing"
 )
 
-// func GetShardAddressFromShardKey(skey string, addrs []string) (string, int) {
-// 	index := int(crc32.ChecksumIEEE([]byte(skey))) % len(addrs)
-// 	flog(skey, " ", index)
-// 	host := addrs[index]
-// 	return host, index
-// }
-
-func tryDial(addr string, dialConfig *DialConfig, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
-	for i := 0; i < dialConfig.MaxRetryConnect; i++ {
-		co, err := grpc.Dial(addr, opts...)
-		if err == nil {
-			return co, nil
+func nonAddressCaller(dialConfig *DialConfig, dialOpts []grpc.DialOption, ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) ([]string, error) {
+	var header metadata.MD
+	opts = append(opts, grpc.Header(&header))
+	// automatic call to grpc server
+	err := invoker(ctx, method, req, reply, cc, opts...)
+	if err != nil && !strings.Contains(strings.ToLower(err.Error()), TransportError) {
+		co, err := grpc.Dial(dialConfig.DefaultDNS, dialOpts...)
+		if err != nil {
+			return nil, fmt.Errorf("dial error: %s", err.Error())
 		}
-		time.Sleep(dialConfig.ThrottlingDuration)
+		if err := invoker(ctx, method, req, reply, co, opts...); err != nil {
+			return nil, fmt.Errorf("invoker fail %s", err.Error())
+		}
 	}
-	return nil, errors.New("can't retry connection to: " + addr)
-}
-
-func tryInvoke(fnInvoke func(cc *grpc.ClientConn) error,
-	lock *sync.RWMutex, mConn map[string]*grpc.ClientConn, addr string, dialConfig *DialConfig,
-	opts ...grpc.DialOption) error {
-	co, err := tryDial(addr, dialConfig, opts...)
-	if err != nil {
-		return err
+	addrs := make([]string, 0)
+	if len(header[shard_addrs]) > 0 {
+		addrs = header[shard_addrs]
 	}
-	lock.Lock()
-	mConn[addr] = co
-	lock.Unlock()
-	log.Print("retry invoke")
-	err = fnInvoke(co)
-	return err
+	if len(addrs) == 0 {
+		log.Print("addrs still empty")
+		return nil, errors.New("no address to connect")
+	}
+	return addrs, nil
 }
 
 // UnaryClientInterceptor is called on every request from a client to a unary
@@ -65,147 +56,45 @@ func UnaryClientInterceptor(dialConfig *DialConfig, dialOpts ...grpc.DialOption)
 	mConn := make(map[string]*grpc.ClientConn)
 	lock := &sync.RWMutex{}
 	addrs := make([]string, 0)
-
-	return func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+	return func(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 		// At first time: have not info of all address
 		// Dial 1 of them to get all shard address then append to map
 		if len(addrs) == 0 {
-			var header metadata.MD
-			opts = append(opts, grpc.Header(&header))
-			// automatic call to grpc server
-			err := invoker(ctx, method, req, reply, cc, opts...)
-			if err != nil {
-				err = tryInvoke(func(cc *grpc.ClientConn) error {
-					err = cc.Invoke(ctx, method, req, reply, opts...)
-					return err
-				}, lock, mConn, dialConfig.DefaultDNS, dialConfig, dialOpts...)
-				log.Print(err)
-			}
-			// if header have shard_redirect value is need change process
-			if val := header.Get(shard_redirected); strings.Join(val, "") != "" {
-				addr := strings.Join(val, "")
-				lock.RLock()
-				co, has := mConn[addr]
-				lock.RUnlock()
-				if !has {
-					// _co, err := tryDial(addr, dialConfig, dialOpts...)
-					// if err != nil {
-					// 	return err
-					// }
-					// lock.Lock()
-					// mConn[addr] = _co
-					// lock.Unlock()
-					// co = _co
-					tryInvoke(func(cc *grpc.ClientConn) error {
-						err = cc.Invoke(ctx, method, req, reply, opts...)
-						return err
-					}, lock, mConn, addr, dialConfig, dialOpts...)
-				} else {
-					err = co.Invoke(ctx, method, req, reply, opts...)
-				}
-
-			}
-			if err != nil {
-				log.Print("[client] ", err)
-				return err
-			}
-			if len(header[shard_addrs]) > 0 {
-				addrs = header[shard_addrs]
-			}
-			if len(addrs) == 0 {
-				log.Print("[client] addrs still empty")
-			}
-			return nil
+			lock.Lock()
+			defer lock.Unlock()
+			addrOut, err := nonAddressCaller(dialConfig, dialOpts, ctx, method, req, reply, cc, invoker, opts...)
+			addrs = addrOut
+			return err
 		}
+
 		// this case work for connection working, addrs has resolved
 		// just action with server
-		var err error
 		var header metadata.MD
 		skey := GetClientShardKey(ctx, req)
 		if len(addrs) == 0 {
-			panic("not found addrs")
+			return errors.New("no address to connect")
 		}
 		addr, _ := calcAddress(skey, addrs)
 		lock.RLock()
 		co, has := mConn[addr]
 		lock.RUnlock()
 		if !has {
-			co, err = tryDial(addr, dialConfig, dialOpts...)
+			newConn, err := grpc.Dial(addr, dialOpts...)
 			if err != nil {
-				return err
+				return fmt.Errorf("connect addrs fail %s", err.Error())
 			}
 			lock.Lock()
-			mConn[addr] = co
+			mConn[addr] = newConn
+			co = newConn
 			lock.Unlock()
 		}
 		// var header metadata.MD // variable to store header and trailer
 		opts = append([]grpc.CallOption{grpc.Header(&header)}, opts...)
-		err = co.Invoke(ctx, method, req, reply, opts...)
-		if err != nil {
+		if err := co.Invoke(ctx, method, req, reply, opts...); err != nil {
 			if !strings.Contains(strings.ToLower(err.Error()), TransportError) {
-				return err
+				return fmt.Errorf("invoke error: %s", err)
 			}
-			log.Print("+++ Connection break: maybe some ip changed +++")
-			// need retry now
-			err = tryInvoke(func(cc *grpc.ClientConn) error {
-				err = cc.Invoke(ctx, method, req, reply, opts...)
-				return err
-			}, lock, mConn, addr, dialConfig, dialOpts...)
 		}
-		return err
+		return nil
 	}
-}
-
-// getReturnType returns the return types for a GRPC method
-// the method name should be full method name (i.e., /package.service/method)
-// For example, with handler
-//
-//	(s *server) func Goodbye() string {}
-//	(s *server) func Ping(_ context.Context, _ *pb.Ping) (*pb.Pong, error) {}
-//	(s *server) func Hello(_ context.Context, _ *pb.Empty) (*pb.String, error) {}
-func getReturnType(server interface{}, fullmethod string) reflect.Type {
-	flog(server, "  ", fullmethod)
-	t := reflect.TypeOf(server)
-	for i := 0; i < t.NumMethod(); i++ {
-		methodType := t.Method(i).Type
-
-		if !strings.HasSuffix(fullmethod, "/"+t.Method(i).Name) {
-			continue
-		}
-
-		if methodType.NumOut() != 2 || methodType.NumIn() < 2 {
-			continue
-		}
-
-		// the first parameter should context and the second one should be a pointer
-		if methodType.In(1).Name() != "Context" || methodType.In(2).Kind() != reflect.Ptr {
-			continue
-		}
-
-		// the first output should be a pointer and the second one should be an error
-		if methodType.Out(0).Kind() != reflect.Ptr || methodType.Out(1).Name() != "error" {
-			continue
-		}
-
-		return methodType.Out(0).Elem()
-
-	}
-	return nil
-}
-
-func GetClientShardKey(ctx context.Context, message interface{}) string {
-	md, _ := metadata.FromOutgoingContext(ctx)
-	if len(md[shard_key]) > 0 {
-		return md[shard_key][0]
-	}
-	if message == nil {
-		return ""
-	}
-	msgrefl := message.(proto.Message).ProtoReflect()
-	defShardKey := msgrefl.Descriptor().Fields().ByName(shard_default_key)
-	if defShardKey == nil {
-		return ""
-	}
-
-	return msgrefl.Get(defShardKey).String()
 }

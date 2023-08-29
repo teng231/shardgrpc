@@ -27,13 +27,22 @@ func TestCheckShardKey(t *testing.T) {
 	log.Print(index)
 }
 
+func TestShard(t *testing.T) {
+	arr := []string{"0", "1"}
+	_, index := calcAddress("4516", arr)
+	log.Print(index)
+	_, index = calcAddress("4517", arr)
+	log.Print(index)
+}
+
 type TestCacheApiServer struct {
 	// ncall int
 }
 
 type TestShardApiServer struct {
 	// id     int
-	shards []string
+	shards  []string
+	servers []*ServerInfo
 }
 
 func (me *TestShardApiServer) ListVisitors(ctx context.Context, req *pb.VisitorRequest) (*pb.Visitors, error) {
@@ -57,17 +66,8 @@ func MakeContext(sec int, claims interface{}) (context.Context, context.CancelFu
 	}
 	return ctx, cancel
 }
-func (me TestShardApiServer) ServeV2(id int) {
-	lis, err := net.Listen("tcp", me.shards[id])
-	if err != nil {
-		panic(err)
-	}
 
-	grpcServer := grpc.NewServer(grpc.UnaryInterceptor(UnaryServerInterceptor(me.shards, id)))
-	pb.RegisterVistorServiceServer(grpcServer, &me)
-	grpcServer.Serve(lis)
-}
-
+// ServeV0 for testing normal server not using anything shard
 func (me TestShardApiServer) ServeV0(id int) {
 	lis, err := net.Listen("tcp", me.shards[id])
 	if err != nil {
@@ -79,19 +79,67 @@ func (me TestShardApiServer) ServeV0(id int) {
 	grpcServer.Serve(lis)
 }
 
+// ServeV1 for testing statefull server k8s
+func (me TestShardApiServer) ServeV1(id int) {
+	lis, err := net.Listen("tcp", me.shards[id])
+	if err != nil {
+		panic(err)
+	}
+
+	grpcServer := grpc.NewServer(grpc.UnaryInterceptor(UnaryServerInterceptor(me.shards, id)))
+	pb.RegisterVistorServiceServer(grpcServer, &me)
+	grpcServer.Serve(lis)
+}
+
+func (me TestShardApiServer) ServeV1x(hostname, port string, shardcount int) {
+	lis, err := net.Listen("tcp", hostname+":"+port)
+	if err != nil {
+		panic(err)
+	}
+	opts := []grpc.ServerOption{
+		grpc.KeepaliveParams(keepalive.ServerParameters{
+			MaxConnectionAge: 30 * time.Second,
+		}),
+		grpc.UnaryInterceptor(
+			UnaryServerInterceptorStatefullset(hostname, port, "", shardcount),
+		),
+	}
+	grpcServer := grpc.NewServer(opts...)
+	pb.RegisterVistorServiceServer(grpcServer, &me)
+	grpcServer.Serve(lis)
+}
+
+// ServeV2 for testing normal server using shard
+func (me TestShardApiServer) ServeV2(id int) {
+	ser := me.servers[id]
+	lis, err := net.Listen("tcp", ser.Host+":"+strconv.Itoa(ser.Port))
+	if err != nil {
+		panic(err)
+	}
+
+	servers := []string{}
+
+	for _, ser := range me.servers {
+		servers = append(servers, ser.Host+":"+strconv.Itoa(ser.Port))
+	}
+	grpcServer := grpc.NewServer(grpc.UnaryInterceptor(UnaryServerInterceptor(servers, id)))
+	pb.RegisterVistorServiceServer(grpcServer, &me)
+	grpcServer.Serve(lis)
+}
+
 // clientshard -> servershard
 func TestShardServerAndClient(t *testing.T) {
-	server0 := &TestShardApiServer{shards: []string{":21250", ":21251"}}
+	server0 := &TestShardApiServer{servers: []*ServerInfo{{Port: 21250}, {Port: 21251}}}
 	go server0.ServeV2(0)
 
-	server1 := &TestShardApiServer{shards: []string{":21250", ":21251"}}
+	server1 := &TestShardApiServer{servers: []*ServerInfo{{Port: 21250}, {Port: 21251}}}
 	go server1.ServeV2(1)
 
 	time.Sleep(100 * time.Millisecond)
-	conn, err := grpc.Dial(":21251",
+	conn, err := grpc.Dial(":21250",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithUnaryInterceptor(UnaryClientInterceptor(
-			&DialConfig{ThrottlingDuration: 10 * time.Millisecond, MaxRetryConnect: 3},
+			&DialConfig{ThrottlingDuration: 10 * time.Millisecond, MaxRetryConnect: 3, DefaultDNS: ":21250"},
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithKeepaliveParams(keepalive.ClientParameters{
 				Time:                10 * time.Second,
@@ -189,38 +237,6 @@ func TestNotShardServerV2(t *testing.T) {
 	// }
 }
 
-// normal client -> servershard
-func TestNotShardServerV2WithNormalcase(t *testing.T) {
-	server0 := &TestShardApiServer{shards: []string{":21240", ":21241"}}
-	go server0.ServeV2(0)
-
-	server1 := &TestShardApiServer{shards: []string{":21240", ":21241"}}
-	go server1.ServeV2(1)
-
-	conn, err := grpc.Dial(":21240", grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		panic(err)
-	}
-	client := pb.NewVistorServiceClient(conn)
-
-	// correct server
-	var header metadata.MD // variable to store header and trailer
-	data, err := client.ListVisitors(context.Background(), &pb.VisitorRequest{AccountId: "thanh"}, grpc.Header(&header))
-	log.Print(data, err, header)
-	// if strings.Join(header.Get("shard_addrs"), "") != "" {
-	// 	t.Fatal("SHOULD NOT RETURN ANY SHARD_NUM")
-	// }
-
-	// must redirect
-	var header2 metadata.MD // variable to store header and trailer
-	data, err = client.ListVisitors(context.Background(), &pb.VisitorRequest{AccountId: "thanh1"}, grpc.Header(&header2))
-	log.Print(data, err, header2)
-	// if strings.Join(header2.Get("shard_addrs"), ",") != ":21240,:21241" {
-
-	// 	t.Fatal("SHOULD RETURN SHARD NUM", strings.Join(header2.Get("shard_addrs"), ","))
-	// }
-}
-
 func TestResolveHost(t *testing.T) {
 	serviceDomain := "a12.staging.cluster.local"
 	port := "6000"
@@ -253,107 +269,4 @@ func TestResolveHost(t *testing.T) {
 		serviceAddrs = append(serviceAddrs, app+"-"+strconv.Itoa(i)+"."+serviceDomain+":"+port)
 	}
 	log.Print(serviceAddrs, index)
-}
-func (me TestShardApiServer) ServeV1(hostname, port string, shardcount int) {
-	lis, err := net.Listen("tcp", hostname+":"+port)
-	if err != nil {
-		panic(err)
-	}
-	opts := []grpc.ServerOption{
-		grpc.KeepaliveParams(keepalive.ServerParameters{
-			MaxConnectionAge: 30 * time.Second,
-		}),
-		grpc.UnaryInterceptor(
-			UnaryServerInterceptorStatefullset(hostname, port, "", shardcount),
-		),
-	}
-	grpcServer := grpc.NewServer(opts...)
-	pb.RegisterVistorServiceServer(grpcServer, &me)
-	grpcServer.Serve(lis)
-}
-
-func TestShardServerV2StateFull(t *testing.T) {
-	server0 := &TestShardApiServer{shards: []string{}}
-
-	go server0.ServeV1("lhost-0", "21240", 2)
-
-	server1 := &TestShardApiServer{shards: []string{}}
-	go server1.ServeV1("lhost-1", "21241", 2)
-
-	time.Sleep(100 * time.Millisecond)
-	conn, err := grpc.Dial("lhost-0:21240",
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithUnaryInterceptor(UnaryClientInterceptor(
-			&DialConfig{ThrottlingDuration: 10 * time.Millisecond, MaxRetryConnect: 3},
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		)))
-	if err != nil {
-		panic(err)
-	}
-	client := pb.NewVistorServiceClient(conn)
-
-	// correct server
-	var header metadata.MD // variable to store header and trailer
-
-	c, cancel := MakeContext(20, nil)
-	defer cancel()
-	c = metadata.AppendToOutgoingContext(c, "s_key", "thanh1")
-
-	data, err := client.ListVisitors(c, &pb.VisitorRequest{AccountId: "thanh1"}, grpc.Header(&header))
-	log.Print(data, err, header)
-
-	// if strings.Join(header.Get("shard_addrs"), "") != "" {
-	// 	t.Fatal("SHOULD NOT RETURN ANY SHARD_NUM")
-	// }
-	log.Print("------------------------------------------------------------------------------------------------")
-
-	// must redirect
-	var header2 metadata.MD // variable to store header and trailer
-
-	c2, cancel := MakeContext(20, nil)
-	defer cancel()
-	c2 = metadata.AppendToOutgoingContext(c2, "s_key", "thanh")
-
-	data, err = client.ListVisitors(c2, &pb.VisitorRequest{AccountId: "thanh"}, grpc.Header(&header2))
-	log.Print(data, err, header2)
-	// if strings.Join(header2.Get("shard_addrs"), ",") != ":21240,:21241" {
-
-	// 	t.Fatal("SHOULD RETURN SHARD NUM", strings.Join(header2.Get("shard_addrs"), ","))
-	// }
-}
-
-func TestShardServerAndClientNotResolve(t *testing.T) {
-	server0 := &TestShardApiServer{shards: []string{":21250", ":21251"}}
-	go server0.ServeV2(0)
-
-	server1 := &TestShardApiServer{shards: []string{":21250", ":21251"}}
-	go server1.ServeV2(1)
-
-	time.Sleep(100 * time.Millisecond)
-	conn, err := grpc.Dial(":21250",
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithUnaryInterceptor(UnaryClientInterceptor(
-			&DialConfig{ThrottlingDuration: 10 * time.Millisecond, MaxRetryConnect: 3},
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		)))
-	if err != nil {
-		panic(err)
-	}
-	client := pb.NewVistorServiceClient(conn)
-	time.Sleep(2 * time.Second)
-	// correct server
-	var header metadata.MD // variable to store header and trailer
-	c, cancel := MakeContext(20, nil)
-	defer cancel()
-	c = metadata.AppendToOutgoingContext(c, "s_key", "thanh")
-	resp, err := client.ListVisitors(c, &pb.VisitorRequest{AccountId: "thanh"}, grpc.Header(&header))
-	// log.Print("header", header)
-	log.Print(resp, err, header)
-	if err != nil {
-		log.Print(err)
-	}
-	if resp.Total == 0 {
-		t.Fail()
-	}
-	log.Print("------------------------------------------------------------------------------------------------")
 }
