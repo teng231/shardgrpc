@@ -7,9 +7,15 @@ import (
 	"log"
 	"strings"
 	"sync"
+	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/metadata"
+)
+
+const (
+	MAX_BACKOFF = 3
 )
 
 type IClient interface {
@@ -84,6 +90,7 @@ func (s *Client) UnaryClientInterceptor(dialConfig *DialConfig, dialOpts ...grpc
 			defer s.lock.Unlock()
 			return s.nonAddressCaller(dialConfig, dialOpts, ctx, method, req, reply, cc, invoker, opts...)
 		}
+		// check connection is online
 
 		// this case work for connection working, addrs has resolved
 		// just action with server
@@ -93,22 +100,47 @@ func (s *Client) UnaryClientInterceptor(dialConfig *DialConfig, dialOpts ...grpc
 			return errors.New("no address to connect")
 		}
 		addr, _ := calcAddress(skey, s.addrs)
-		s.lock.RLock()
-		co, has := s.mConn[addr]
-		s.lock.RUnlock()
-		if !has {
-			newConn, err := grpc.Dial(addr, dialOpts...)
-			if err != nil {
-				return fmt.Errorf("connect addrs fail %s", err.Error())
+		var connErr error
+		var co *grpc.ClientConn
+		var has bool
+		for i := 0; i < MAX_BACKOFF; i++ {
+			connErr = nil
+			s.lock.RLock()
+			co, has = s.mConn[addr]
+			s.lock.RUnlock()
+
+			if !has {
+				newConn, err := grpc.Dial(addr, dialOpts...)
+				if err != nil {
+					connErr = err
+					// return fmt.Errorf("connect addrs fail %s", err.Error())
+					continue
+				}
+				s.lock.Lock()
+				s.mConn[addr] = newConn
+				co = newConn
+				s.lock.Unlock()
+				break
 			}
-			s.lock.Lock()
-			s.mConn[addr] = newConn
-			co = newConn
-			s.lock.Unlock()
+			log.Print(co.GetState())
+			if co.GetState() == connectivity.TransientFailure {
+				// connection with server temporary closed
+				s.lock.Lock()
+				// remove old connection.
+				delete(s.mConn, addr)
+				s.lock.Unlock()
+				time.Sleep(5 * time.Millisecond)
+				continue
+			}
 		}
+		if connErr != nil {
+			return fmt.Errorf("connect addrs fail %s", connErr.Error())
+		}
+
 		// var header metadata.MD // variable to store header and trailer
 		opts = append([]grpc.CallOption{grpc.Header(&header)}, opts...)
 		if err := co.Invoke(ctx, method, req, reply, opts...); err != nil {
+			log.Print(err)
 			if !strings.Contains(strings.ToLower(err.Error()), TransportError) {
 				return fmt.Errorf("invoke error: %s", err)
 			}
