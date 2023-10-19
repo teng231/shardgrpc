@@ -122,7 +122,7 @@ func (s *Client) UnaryClientInterceptor(dialConfig *DialConfig, dialOpts ...grpc
 				s.lock.Unlock()
 				break
 			}
-			log.Print(co.GetState())
+			// log.Print(co.GetState())
 			if co.GetState() == connectivity.TransientFailure {
 				// connection with server temporary closed
 				s.lock.Lock()
