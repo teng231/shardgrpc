@@ -127,9 +127,10 @@ func (s *Client) UnaryClientInterceptor(dialConfig *DialConfig, dialOpts ...grpc
 				// connection with server temporary closed
 				s.lock.Lock()
 				// remove old connection.
-				delete(s.mConn, addr)
+				// delete(s.mConn, addr)
+				s.mConn = make(map[string]*grpc.ClientConn)
 				s.lock.Unlock()
-				time.Sleep(5 * time.Millisecond)
+				time.Sleep(50 * time.Millisecond)
 				continue
 			}
 		}
