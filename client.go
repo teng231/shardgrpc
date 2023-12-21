@@ -92,7 +92,7 @@ func UnaryClientInterceptor(dialConfig *DialConfig, dialOpts ...grpc.DialOption)
 		opts = append([]grpc.CallOption{grpc.Header(&header)}, opts...)
 		if err := co.Invoke(ctx, method, req, reply, opts...); err != nil {
 			if !strings.Contains(strings.ToLower(err.Error()), TransportError) {
-				return fmt.Errorf("invoke error: %s", err)
+				return err
 			}
 		}
 		return nil

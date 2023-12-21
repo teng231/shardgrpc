@@ -143,7 +143,7 @@ func (s *Client) UnaryClientInterceptor(dialConfig *DialConfig, dialOpts ...grpc
 		if err := co.Invoke(ctx, method, req, reply, opts...); err != nil {
 			log.Print(err)
 			if !strings.Contains(strings.ToLower(err.Error()), TransportError) {
-				return fmt.Errorf("invoke error: %s", err)
+				return err
 			}
 		}
 		return nil
